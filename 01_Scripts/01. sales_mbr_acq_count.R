@@ -21,15 +21,16 @@ date_end <- date_start + months(36) - days(1)
 
 # data extraction ---------------------------------------------------------
 
-
+# getting member spend profile since FY19
 get_mbr_spend_profile <- function(date_start = date_start, date_end = date_end) {
     
     # get spend profile for current year
-    fy_country_sales_tbl <- kmdr::base_txn_query(con, period_start = date_start, period_end = date_end) %>%
+    data <- kmdr::base_txn_query(con, period_start = date_start, period_end = date_end) %>%
         filter(customer_type == "Summit Club") %>% 
         
         group_by(fin_year, sales_country) %>% 
         summarise(
+            mbr_shopped = n_distinct(customer_number),
             mbr_revenue = sum(sale_amount_excl_gst, na.rm =  TRUE),
             mbr_txn     = n_distinct(sale_transaction)
         ) %>% 
@@ -37,12 +38,78 @@ get_mbr_spend_profile <- function(date_start = date_start, date_end = date_end) 
         ungroup() %>% 
         
         mutate(mbr_revenue = scales::dollar(mbr_revenue)) %>%  
-        arrange(fy_country_sales_tbl)
+        arrange(fin_year, sales_country, .by_group = TRUE)
     
-    return(fy_country_sales_tbl)
+    return(data)
 }
 
-fy_country_sales_tbl <- get_mbr_spend_profile(date_start, date_end)
+fy_country_spend_tbl <- get_mbr_spend_profile(date_start, date_end)
+
+# getting 24m member spend profile for FY19
+fy19_country_spend_tbl <- kmdr::base_txn_query(con, period_start = as.Date("2017-08-01"), period_end = as.Date("2019-07-31")) %>%
+    filter(customer_type == "Summit Club") %>% 
+    
+    group_by(sales_country) %>% 
+    summarise(
+        mbr_shopped = n_distinct(customer_number),
+        mbr_revenue = sum(sale_amount_excl_gst, na.rm =  TRUE),
+        mbr_txn     = n_distinct(sale_transaction)
+    ) %>% 
+    collect() %>% 
+    ungroup() %>% 
+    
+    mutate(mbr_revenue = scales::dollar(mbr_revenue)) %>%  
+    arrange(sales_country, .by_group = TRUE)
+
+# getting 24m member spend profile for FY20
+fy20_country_spend_tbl <- kmdr::base_txn_query(con, period_start = as.Date("2018-08-01"), period_end = as.Date("2020-07-31")) %>%
+    filter(customer_type == "Summit Club") %>% 
+    
+    group_by(sales_country) %>% 
+    summarise(
+        mbr_shopped = n_distinct(customer_number),
+        mbr_revenue = sum(sale_amount_excl_gst, na.rm =  TRUE),
+        mbr_txn     = n_distinct(sale_transaction)
+    ) %>% 
+    collect() %>% 
+    ungroup() %>% 
+    
+    mutate(mbr_revenue = scales::dollar(mbr_revenue)) %>%  
+    arrange(sales_country, .by_group = TRUE)
+
+# getting 24m member spend profile for FY21
+fy21_country_spend_tbl <- kmdr::base_txn_query(con, period_start = as.Date("2019-08-01"), period_end = as.Date("2021-07-31")) %>%
+    filter(customer_type == "Summit Club") %>% 
+    
+    group_by(sales_country) %>% 
+    summarise(
+        mbr_shopped = n_distinct(customer_number),
+        mbr_revenue = sum(sale_amount_excl_gst, na.rm =  TRUE),
+        mbr_txn     = n_distinct(sale_transaction)
+    ) %>% 
+    collect() %>% 
+    ungroup() %>% 
+    
+    mutate(mbr_revenue = scales::dollar(mbr_revenue)) %>%  
+    arrange(sales_country, .by_group = TRUE)
+
+# getting new member counts since FY19
+fy_new_member_tbl <- base_member_query(con) %>%
+    filter(country %in% c("Australia", "New Zealand", "United Kingdom")
+           & join_cal_month_start >= date_start 
+           & join_cal_month_start <= date_end ) %>% 
+    
+    #selecting fin year, country and customer number for reporting
+    select(join_fin_year , country, customer_number) %>% 
+    
+    group_by(join_fin_year , country) %>% 
+    summarise(
+        mbr_shopped = n_distinct(customer_number)
+    ) %>% 
+    
+    arrange(join_fin_year, country) %>% 
+    collect()
+
 
 
 build_date_range <- function(from, to, by){
