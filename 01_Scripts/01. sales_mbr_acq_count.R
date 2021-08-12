@@ -14,9 +14,9 @@ con <- DBI::dbConnect(odbc::odbc(), Driver = "SQL Server", Server = "BIDW",
 
 tbl_database <- set_source_tables(con)
 
-date_start <- as.Date("2020-08-01")
+date_start <- as.Date("2018-08-01")
 
-date_end <- date_start + months(12) - days(1)
+date_end <- date_start + months(36) - days(1)
 
 
 # data extraction ---------------------------------------------------------
@@ -25,10 +25,10 @@ date_end <- date_start + months(12) - days(1)
 get_mbr_spend_profile <- function(date_start = date_start, date_end = date_end) {
     
     # get spend profile for current year
-    sales_current_year_tbl <- kmdr::base_txn_query(con, period_start = date_start, period_end = date_end) %>%
+    fy_country_sales_tbl <- kmdr::base_txn_query(con, period_start = date_start, period_end = date_end) %>%
         filter(customer_type == "Summit Club") %>% 
         
-        group_by(sales_country) %>% 
+        group_by(fin_year, sales_country) %>% 
         summarise(
             mbr_revenue = sum(sale_amount_excl_gst, na.rm =  TRUE),
             mbr_txn     = n_distinct(sale_transaction)
@@ -36,36 +36,37 @@ get_mbr_spend_profile <- function(date_start = date_start, date_end = date_end) 
         collect() %>% 
         ungroup() %>% 
         
-        mutate(mbr_revenue = scales::dollar(mbr_revenue)) 
+        mutate(mbr_revenue = scales::dollar(mbr_revenue)) %>%  
+        arrange(fy_country_sales_tbl)
     
-    return(sales_current_year_tbl)
+    return(fy_country_sales_tbl)
+}
+
+fy_country_sales_tbl <- get_mbr_spend_profile(date_start, date_end)
+
+
+build_date_range <- function(from, to, by){
     
-    # get spend profile for the previous year
-    date_start_LY = date_start - months(12)
+    period_start <- as.Date(from)
     
-    date_end_LY = date_start_LY - days(1)
+    period_end <- as.Date(to)
     
+    if (!by %in% c("day", "month", "week", "year")) {
+        stop("`by` must be 'day', 'week' or 'month'", call. = FALSE)
+    }
     
-    sales_last_year_tbl <- kmdr::base_txn_query(con, period_start = date_start_LY, period_end = date_end_LY) %>%
-        filter(customer_type == "Summit Club") %>% 
-        
-        group_by(sales_country) %>% 
-        summarise(
-            mbr_revenue = sum(sale_amount_excl_gst, na.rm =  TRUE),
-            mbr_txn     = n_distinct(sale_transaction)
-        ) %>% 
-        collect() %>% 
-        ungroup() %>% 
-        
-        mutate(mbr_revenue = scales::dollar(mbr_revenue)) 
-    
-    return(sales_last_year_tbl)
-    
+    date_range <- dplyr::tibble(period_start= seq.Date(from = period_start, to = period_end, by =by),
+                                
+                    period_end = dplyr::case_when(
+                        by== "month" ~ lubridate::ceiling_date(period_start, "month") - lubridate::days(1),
+                        by == "week"~ period_start + lubridate::days(6),
+                        TRUE ~ period_start))
+
+    return(date_range)
     
 }
 
-get_mbr_spend_profile(date_start, date_end)
-
+build_date_range('2019-08-01','2021-07-31', 'month')
 
 
 
